@@ -1,0 +1,11 @@
+Model Information:
+* title:	Cables on floor
+* source:	https://sketchfab.com/3d-models/cables-on-floor-86d894d4e72d4bc8b1f6a1263f60e753
+* author:	nooraha (https://sketchfab.com/nooraha)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Cables on floor" (https://sketchfab.com/3d-models/cables-on-floor-86d894d4e72d4bc8b1f6a1263f60e753) by nooraha (https://sketchfab.com/nooraha) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

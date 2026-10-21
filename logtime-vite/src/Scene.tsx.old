@@ -1,0 +1,71 @@
+import {useEffect,useRef,useState} from 'react';
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+// Edit these values, save, and Vite will refresh the scene.
+const LIGHTING = {
+ exposure: 3.2, // Overall scene brightness
+ ambient: 0, // Soft light everywhere; lower for stronger contrast
+ //skyColor: '#7cb886',
+ skyColor: '#c52222',
+ groundColor: '#ffffff',
+ keyIntensity: 0.0, // Main directional light and shadows
+ keyColor: '#ffffff',
+ keyPosition: [-1.0, -2.0, -3.0] as [number, number, number],
+ fillIntensity: 20, // Secondary point light
+ //fillColor: '#75fa7a',
+ fillColor: '#c52222',
+ fillPosition: [2, 0, -5] as [number, number, number],
+ screenIntensity: 2.5, // Green light spilling from the CRT
+ fogDensity: 0.05,
+};
+const ROOM_ROTATION_DEGREES = 90; // Use -90 for the opposite direction.
+
+type Props={readout:string; hours: number | null;};
+export default function Scene({readout, hours}:Props){
+ const host=useRef<HTMLDivElement>(null), canvasElement=useRef<HTMLCanvasElement>(null), update=useRef<(s:string)=>void>(()=>{});
+ const [status,setStatus]=useState('Loading concrete, cables and CRT…');
+ useEffect(()=>{update.current(readout)},[readout]);
+ useEffect(()=>{
+  const mount=host.current!;let dead=false;let renderer:THREE.WebGLRenderer;
+  try{renderer=new THREE.WebGLRenderer({canvas:canvasElement.current!,antialias:true,alpha:false,powerPreference:'high-performance'})}catch{setStatus('WebGL is unavailable. Enable hardware acceleration and reload.');return}
+  renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=LIGHTING.exposure;
+  const scene=new THREE.Scene();scene.background=new THREE.Color('#000000');scene.fog=new THREE.FogExp2('#000000',LIGHTING.fogDensity);
+  const camera=new THREE.PerspectiveCamera(52,1,.04,100);camera.position.set(1.65,1.66,1.85);camera.lookAt(1.65,1.66,-2);
+  const hemisphere=new THREE.HemisphereLight(LIGHTING.skyColor,LIGHTING.groundColor,LIGHTING.ambient);scene.add(hemisphere);
+  const key=new THREE.DirectionalLight(LIGHTING.keyColor,LIGHTING.keyIntensity);key.position.set(...LIGHTING.keyPosition);key.castShadow=true;key.shadow.mapSize.set(2048,2048);key.shadow.camera.left=-5;key.shadow.camera.right=5;key.shadow.camera.top=5;key.shadow.camera.bottom=-5;key.shadow.normalBias=.025;key.target.position.set(1.65,0,-2);scene.add(key,key.target);
+  const fill=new THREE.PointLight(LIGHTING.fillColor,LIGHTING.fillIntensity,12,2);fill.position.set(...LIGHTING.fillPosition);scene.add(fill);
+  const screenLight=new THREE.PointLight('#c52222',LIGHTING.screenIntensity,2.5,2);screenLight.position.set(1.65,1.65,-1.1);scene.add(screenLight);
+  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=768;const ctx=canvas.getContext('2d')!;const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  function paint(text:string){ctx.fillStyle='#c52222';ctx.fillRect(0,0,1024,768);const g=ctx.createRadialGradient(512,380,30,512,380,600);g.addColorStop(0.001,'#580c1f');g.addColorStop(1,'#000000');ctx.fillStyle=g;ctx.fillRect(0,0,1024,768);ctx.font=`Bold ${text.length > 10 ? 85 : 128}px "ShureTechMono Nerd Font Mono",monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='#c52222';ctx.shadowBlur=22;ctx.fillStyle='#ff8787';ctx.fillText(text,512,384);ctx.shadowBlur=4;ctx.fillText(text,512,384);ctx.shadowBlur=5;ctx.fillStyle='rgba(0,0,0,.18)';for(let y=0;y<768;y+=5)ctx.fillRect(0,y,1024,2);tex.needsUpdate=true}
+  update.current=paint;paint(readout);
+  const loader=new GLTFLoader();const loaded:THREE.Object3D[]=[];
+  function setup(o:THREE.Object3D){o.traverse(n=>{if(n instanceof THREE.Mesh){n.castShadow=true;n.receiveShadow=true}});scene.add(o);loaded.push(o);return o}
+  function cable(points:number[][],radius=.014){const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p as [number,number,number])));const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,100,radius,8,false),new THREE.MeshStandardMaterial({color:'#151a17',roughness:.78}));mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh)}
+  async function load(){try{
+   const [room,tv,table,cables]=await Promise.all(['room','tv','table','cables'].map(k=>loader.loadAsync(`/models/${k}/scene.gltf`)));
+   if(dead){for(const g of [room,tv,table,cables])dispose(g.scene);return}
+   setup(room.scene);room.scene.rotation.y=THREE.MathUtils.degToRad(ROOM_ROTATION_DEGREES);room.scene.traverse(n=>{if(n instanceof THREE.Mesh){for(const m of Array.isArray(n.material)?n.material:[n.material]){if(m instanceof THREE.MeshStandardMaterial){m.metalness=.08;m.roughness=.9;m.emissiveIntensity=.15}}}});
+   setup(table.scene);table.scene.scale.setScalar(1.25);table.scene.position.set(1.65,-.0015,-2.3);
+   setup(tv.scene);tv.scene.scale.setScalar(2.5);tv.scene.position.set(1.65,1.184,-1.75);
+   const shape=new THREE.Shape();const w=.274,h=.205,r=.019;shape.moveTo(-w/2+r,-h/2);shape.lineTo(w/2-r,-h/2);shape.quadraticCurveTo(w/2,-h/2,w/2,-h/2+r);shape.lineTo(w/2,h/2-r);shape.quadraticCurveTo(w/2,h/2,w/2-r,h/2);shape.lineTo(-w/2+r,h/2);shape.quadraticCurveTo(-w/2,h/2,-w/2,h/2-r);shape.lineTo(-w/2,-h/2+r);shape.quadraticCurveTo(-w/2,-h/2,-w/2+r,-h/2);
+   const geo=new THREE.ShapeGeometry(shape,20);const positions=geo.attributes.position;const uv=geo.attributes.uv;for(let i=0;i<positions.count;i++)uv.setXY(i,(positions.getX(i)+w/2)/w,(positions.getY(i)+h/2)/h);
+   const screen=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,toneMapped:false}));screen.position.set(0,.189,.016);tv.scene.add(screen);
+   setup(cables.scene);cables.scene.scale.setScalar(.84);cables.scene.position.set(4.7,.065,-2.7);
+   // Continue the supplied floor cable up the table's right side to the TV rear.
+   cable([[20.1,.45,-2.7],[20.1,.08,-2.7],[17,.06,-2.65]]);
+   cable([[2.4,.07,-2.7],[2.65,.08,-2.4],[2.7,.08,-1.6],[2.63,.1,-1.4],[2.55,.5,-1.65],[2.48,1.15,-2.1],[2.25,1.22,-2.7],[1.8,1.3,-2.83]]);
+   cable([[3.1,.065,-2.75],[2.95,.06,-1.55],[2.6,.065,-1.2],[2.32,.07,-1.4],[2.4,.08,-2.0]],.009);
+   setStatus('');render();
+  }catch(e){setStatus('Could not load the 3D models. Reload this page with the Vite server running.');console.error(e)}}
+  function render(){if(!dead)renderer.render(scene,camera)}
+  function resize(){const {width,height}=mount.getBoundingClientRect();renderer.setSize(width,height);camera.aspect=width/height;camera.fov=width<700?66:52;camera.updateProjectionMatrix();render()}
+  const observer=new ResizeObserver(resize);observer.observe(mount);resize();load();
+  // Draw on demand: no continuous animation or GPU load while idle.
+  const oldPaint=update.current;update.current=(s)=>{oldPaint(s);render()};
+
+  function dispose(o:THREE.Object3D){o.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();for(const m of Array.isArray(n.material)?n.material:[n.material]){for(const v of Object.values(m))if(v instanceof THREE.Texture)v.dispose();m.dispose()}}})}
+  return()=>{dead=true;observer.disconnect();update.current=()=>{};dispose(scene);tex.dispose();renderer.dispose();};
+ },[]);
+ return <div className="scene" ref={host} aria-label={`3D CRT displaying ${readout}`}><canvas ref={canvasElement} aria-hidden="true"/>{status ? <div className="scene-status" role="status">{status}</div> : null}</div>
+}
