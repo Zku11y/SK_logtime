@@ -222,8 +222,8 @@ camera.position.copy(cameraHome);
 camera.lookAt(monitorTarget);
 
 // Maximum sideways and vertical movement, in scene units.
-const horizontalMovement = 1.5;
-const verticalMovement = 1.5;
+const horizontalMovement = 0.5;
+const verticalMovement = 0.5;
 
 const targetOffset = new THREE.Vector2();
 const currentOffset = new THREE.Vector2();
