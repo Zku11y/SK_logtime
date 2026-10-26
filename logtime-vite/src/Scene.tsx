@@ -24,13 +24,19 @@ const LIGHTING = {
 const SCREEN = {
   width: 1024,
   height: 768,
-  fontFamily: '"ShureTechMono Nerd Font Mono", monospace',
+  fontFamily: '"Digital Clock", monospace',
   glowStrength: 22,
 };
 
 type Props = {
   readout: string;
   hours: number | null;
+  month: string;
+  login: string;
+  loginError: boolean;
+  busy: boolean;
+  onMonthChange: (offset: number) => void;
+  onLoginFocus: () => void;
 };
 
 type ScreenColors = {
@@ -149,21 +155,21 @@ function disposeObject(root: THREE.Object3D) {
   geometries.forEach((geometry) => geometry.dispose());
 }
 
-export default function Scene({ readout, hours }: Props) {
+export default function Scene({ readout, hours, month, login, loginError, busy, onMonthChange, onLoginFocus }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvasElement = useRef<HTMLCanvasElement>(null);
 
-  const latest = useRef({ readout, hours });
+  const latest = useRef({ readout, hours, month, login, loginError, busy, onMonthChange, onLoginFocus });
   const updateScene = useRef<() => void>(() => {});
 
   const [status, setStatus] = useState(
-    'Loading concrete, cables and CRT…'
+    'Loading room and CRT TVs…'
   );
 
   useEffect(() => {
-    latest.current = { readout, hours };
+    latest.current = { readout, hours, month, login, loginError, busy, onMonthChange, onLoginFocus };
     updateScene.current();
-  }, [readout, hours]);
+  }, [readout, hours, month, login, loginError, busy, onMonthChange, onLoginFocus]);
 
   useEffect(() => {
     const mount = host.current;
@@ -176,7 +182,7 @@ export default function Scene({ readout, hours }: Props) {
     let dead = false;
     let renderer: THREE.WebGLRenderer;
 
-    setStatus('Loading concrete, cables and CRT…');
+    setStatus('Loading room and CRT TVs…');
 
     try {
       renderer = new THREE.WebGLRenderer({
@@ -212,11 +218,8 @@ export default function Scene({ readout, hours }: Props) {
 
     const camera = new THREE.PerspectiveCamera(52, 1, 0.04, 100);
 
-    camera.position.set(2.85, 1.66, 0.85);
-    camera.lookAt(1.65, 1.66, -2);
-
-const monitorTarget = new THREE.Vector3(1.65, 1.66, -1.71);
-const cameraHome = new THREE.Vector3(1.65, 1.66, 1.85);
+const monitorTarget = new THREE.Vector3(1.65, 0.65, -1.71);
+const cameraHome = new THREE.Vector3(1.65, 0.95, 1.85);
 
 camera.position.copy(cameraHome);
 camera.lookAt(monitorTarget);
@@ -341,7 +344,7 @@ function animateCamera(time: number) {
       2
     );
 
-    screenLight.position.set(1.65, 1.65, -1.1);
+    screenLight.position.set(1.65, 0.48, -1.1);
     scene.add(screenLight);
 
     // CRT canvas texture
@@ -397,18 +400,23 @@ function animateCamera(time: number) {
 
       const fontSize = 350;
 
-      ctx.font = `bold ${fontSize}px ${SCREEN.fontFamily}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.font = `${fontSize}px ${SCREEN.fontFamily}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+
+      // Center the visible glyphs, accounting for the font's bearings and baseline.
+      const metrics = ctx.measureText(text);
+      const textX = centerX + (metrics.actualBoundingBoxLeft - metrics.actualBoundingBoxRight) / 2;
+      const textY = centerY + (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
 
       ctx.shadowColor = colors.main;
       ctx.shadowBlur = SCREEN.glowStrength;
       ctx.fillStyle = colors.text;
 
-      ctx.fillText(text, centerX, centerY);
+      ctx.fillText(text, textX, textY);
 
       ctx.shadowBlur = 4;
-      ctx.fillText(text, centerX, centerY);
+      ctx.fillText(text, textX, textY);
 
       // Scanlines
 
@@ -428,6 +436,79 @@ function animateCamera(time: number) {
       }
     }
 
+    const sideDisplays: {kind: 'month' | 'login'; canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; mesh: THREE.Mesh}[] = [];
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function paintSideDisplays() {
+      for (const display of sideDisplays) {
+        const context = display.canvas.getContext('2d')!;
+        const state = latest.current;
+        context.shadowBlur = 0;
+        context.fillStyle = '#000000';
+        context.fillRect(0, 0, 1024, 768);
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillStyle = state.loginError && display.kind === 'login' ? '#ff7777' : '#b8edc2';
+        context.shadowColor = context.fillStyle;
+        context.shadowBlur = 14;
+        context.font = `36px ${SCREEN.fontFamily}`;
+        context.fillText(display.kind === 'month' ? 'MONTH' : 'LOGIN', 512, 125);
+        if (display.kind === 'month') {
+          context.font = `270px ${SCREEN.fontFamily}`;
+          context.fillText(String(Number(state.month.slice(5))), 512, 380);
+          // Draw arrows as paths so they do not depend on font glyph support.
+          context.strokeStyle = context.fillStyle;
+          context.lineWidth = 15;
+          context.lineCap = 'round';
+          for (const [x, direction] of [[160, -1], [864, 1]]) {
+            context.beginPath();
+            context.moveTo(x - direction * 28, 335);
+            context.lineTo(x + direction * 28, 380);
+            context.lineTo(x - direction * 28, 425);
+            context.stroke();
+          }
+          context.font = `40px ${SCREEN.fontFamily}`;
+          context.fillText(state.month.slice(0, 4), 512, 595);
+        } else {
+          const text = state.loginError ? 'ERR' : state.busy ? '…' : state.login || '_';
+          let size = 180;
+          context.font = `${size}px ${SCREEN.fontFamily}`;
+          while (context.measureText(text).width > 880 && size > 24) {
+            size -= 2;
+            context.font = `${size}px ${SCREEN.fontFamily}`;
+          }
+          context.fillText(text, 512, 380);
+          context.font = `32px ${SCREEN.fontFamily}`;
+          context.fillText(state.loginError ? 'TYPE TO RETRY' : state.busy ? 'LOADING' : 'TYPE LOGIN / ENTER', 512, 610);
+        }
+        context.shadowBlur = 0;
+        context.fillStyle = 'rgba(0, 0, 0, 0.18)';
+        for (let y = 0; y < 768; y += 5) context.fillRect(0, y, 1024, 2);
+        display.texture.needsUpdate = true;
+      }
+    }
+
+    function hitDisplay(event: PointerEvent) {
+      const bounds = canvasNode!.getBoundingClientRect();
+      pointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1,
+        -(event.clientY - bounds.top) / bounds.height * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      return raycaster.intersectObjects(sideDisplays.map(display => display.mesh), false)[0];
+    }
+
+    function handleScreenPointer(event: PointerEvent) {
+      const hit = hitDisplay(event);
+      if (!hit?.uv) return;
+      event.preventDefault();
+      const display = sideDisplays.find(item => item.mesh === hit.object)!;
+      if (display.kind === 'month') {
+        if (hit.uv.x < 0.3) latest.current.onMonthChange(-1);
+        else if (hit.uv.x > 0.7) latest.current.onMonthChange(1);
+      }
+      latest.current.onLoginFocus();
+    }
+
     updateScene.current = () => {
       if (dead) {
         return;
@@ -440,12 +521,21 @@ function animateCamera(time: number) {
       screenLight.color.set(colors.main);
 
       paint(latest.current.readout);
+      paintSideDisplays();
       render();
     };
 
     paint(latest.current.readout);
 
-    // Model and cable helpers
+    // Canvas text must be repainted after the web font becomes available.
+    void document.fonts.load(`48px ${SCREEN.fontFamily}`).then(() => {
+      if (dead) return;
+      paint(latest.current.readout);
+      paintSideDisplays();
+      render();
+    }).catch(error => console.error('Could not load the display font:', error));
+
+    // Model helpers
 
     const loader = new GLTFLoader();
 
@@ -460,33 +550,81 @@ function animateCamera(time: number) {
       scene.add(object);
     }
 
-    function addCable(
-      points: [number, number, number][],
-      radius = 0.014
-    ) {
-      const curve = new THREE.CatmullRomCurve3(
-        points.map((point) => new THREE.Vector3(...point))
-      );
+    function blackOutScreens(object: THREE.Object3D, materialNames: string[]) {
+      const replaced = new Set<THREE.Material>();
+      object.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
 
-      const geometry = new THREE.TubeGeometry(
-        curve,
-        100,
-        radius,
-        8,
-        false
-      );
+        const replace = (material: THREE.Material) => {
+          if (!materialNames.includes(material.name)) return material;
+          replaced.add(material);
+          return new THREE.MeshBasicMaterial({
+            name: material.name,
+            color: '#000000',
+            side: material.side,
+            toneMapped: false,
+          });
+        };
 
-      const material = new THREE.MeshStandardMaterial({
-        color: '#151a17',
-        roughness: 0.78,
+        child.material = Array.isArray(child.material)
+          ? child.material.map(replace)
+          : replace(child.material);
       });
 
-      const cable = new THREE.Mesh(geometry, material);
+      // These screen and glass materials use textures separate from the cabinets.
+      const textures = new Set<THREE.Texture>();
+      replaced.forEach((material) => {
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture) textures.add(value);
+        }
+        material.dispose();
+      });
+      textures.forEach((texture) => texture.dispose());
+    }
 
-      cable.castShadow = true;
-      cable.receiveShadow = true;
+    function addSideDisplay(object: THREE.Object3D, glassName: string, kind: 'month' | 'login') {
+      // The glass is already facing +Z after placement. Put the display just ahead of it.
+      let glass: THREE.Mesh | undefined;
+      object.traverse(child => {
+        if (child instanceof THREE.Mesh && !Array.isArray(child.material) && child.material.name === glassName) glass = child;
+      });
+      if (!glass) throw new Error(`Missing ${kind} screen glass`);
+      const bounds = new THREE.Box3().setFromObject(glass, true);
+      const size = bounds.getSize(new THREE.Vector3());
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 768;
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(size.x * 0.94, size.y * 0.94),
+        new THREE.MeshBasicMaterial({map: texture, toneMapped: false})
+      );
+      mesh.position.copy(bounds.getCenter(new THREE.Vector3()));
+      mesh.position.z = bounds.max.z + 0.003;
+      scene.add(mesh);
+      sideDisplays.push({kind, canvas, texture, mesh});
+    }
 
-      scene.add(cable);
+    function placeTV(
+      object: THREE.Object3D,
+      width: number,
+      rotationY: number,
+      centerX: number,
+      bottomY: number,
+      frontZ: number
+    ) {
+      object.rotation.y = rotationY;
+      const bounds = new THREE.Box3().setFromObject(object, true);
+      object.scale.multiplyScalar(width / bounds.getSize(new THREE.Vector3()).x);
+      bounds.setFromObject(object, true);
+      object.position.add(new THREE.Vector3(
+        centerX - bounds.getCenter(new THREE.Vector3()).x,
+        bottomY - bounds.min.y,
+        frontZ - bounds.max.z
+      ));
+      setup(object);
+      return new THREE.Box3().setFromObject(object, true);
     }
 
     function addScreen(tv: THREE.Object3D) {
@@ -553,7 +691,7 @@ function animateCamera(time: number) {
 
     async function loadModels() {
       const results = await Promise.allSettled(
-        ['room', 'tv', 'table', 'cables'].map((name) =>
+        ['room', 'tv', 'retro_crt_tv', 'retro_crt_tv_2', 'retro_crt_tv_3'].map((name) =>
           loader.loadAsync(`/models/${name}/scene.gltf`)
         )
       );
@@ -584,7 +722,7 @@ function animateCamera(time: number) {
         result.status === 'fulfilled' ? [result.value] : []
       );
 
-      const [room, tv, table, cables] = models;
+      const [room, tv, leftTV, rightTV, topTV] = models;
 
       try {
         setup(room.scene);
@@ -611,53 +749,33 @@ function animateCamera(time: number) {
           }
         });
 
-        setup(table.scene);
-        table.scene.scale.setScalar(1.25);
-        table.scene.position.set(1.65, -0.0015, -2.3);
-
-        setup(tv.scene);
+        // Keep the original CRT at its existing scale, resting on the floor.
         tv.scene.scale.setScalar(2.5);
-        tv.scene.position.set(1.65, 1.184, -1.75);
-
+        const mainWidth = new THREE.Box3().setFromObject(tv.scene, true)
+          .getSize(new THREE.Vector3()).x;
+        const mainBounds = placeTV(tv.scene, mainWidth, 0, 1.65, 0, -1.72);
         addScreen(tv.scene);
 
-        setup(cables.scene);
-        cables.scene.scale.setScalar(0.84);
-        cables.scene.position.set(4.7, 0.065, -2.7);
+        blackOutScreens(leftTV.scene, ['.013', '.016']);
+        blackOutScreens(rightTV.scene, ['.008', '.010']);
 
-        // Wall connection
+        // These two exports face +X; turn their screens toward the camera (+Z).
+        const sideWidth = 0.95;
+        const gap = 0.12;
+        const sideOffset = mainWidth / 2 + gap + sideWidth / 2;
+        placeTV(leftTV.scene, sideWidth, -Math.PI / 2,
+          1.65 - sideOffset, 0, mainBounds.max.z);
+        placeTV(rightTV.scene, sideWidth, -Math.PI / 2,
+          1.65 + sideOffset, 0, mainBounds.max.z);
 
-        addCable([
-          [20.1, 0.45, -2.7],
-          [20.1, 0.08, -2.7],
-          [17, 0.06, -2.65],
-        ]);
+        addSideDisplay(leftTV.scene, '.016', 'month');
+        addSideDisplay(rightTV.scene, '.010', 'login');
 
-        // Cable running up the table to the TV
-
-        addCable([
-          [2.4, 0.07, -2.7],
-          [2.65, 0.08, -2.4],
-          [2.7, 0.08, -1.6],
-          [2.63, 0.1, -1.4],
-          [2.55, 0.5, -1.65],
-          [2.48, 1.15, -2.1],
-          [2.25, 1.22, -2.7],
-          [1.8, 1.3, -2.83],
-        ]);
-
-        // Additional floor cable
-
-        addCable(
-          [
-            [3.1, 0.065, -2.75],
-            [2.95, 0.06, -1.55],
-            [2.6, 0.065, -1.2],
-            [2.32, 0.07, -1.4],
-            [2.4, 0.08, -2],
-          ],
-          0.009
-        );
+        // Center the smaller TV over the original cabinet, including its depth.
+        const topBounds = placeTV(topTV.scene, 0.72, 0,
+          1.65, mainBounds.max.y, mainBounds.max.z);
+        topTV.scene.position.z += mainBounds.getCenter(new THREE.Vector3()).z
+          - topBounds.getCenter(new THREE.Vector3()).z;
 
         setStatus('');
         updateScene.current();
@@ -705,6 +823,7 @@ function animateCamera(time: number) {
     void loadModels();
 
 
+canvasNode.addEventListener('pointerdown', handleScreenPointer);
 window.addEventListener('pointermove', handlePointerMove);
 window.addEventListener('blur', resetCamera);
 
@@ -720,6 +839,7 @@ animationFrame = requestAnimationFrame(animateCamera);
 
 cancelAnimationFrame(animationFrame);
 
+canvasNode.removeEventListener('pointerdown', handleScreenPointer);
 window.removeEventListener('pointermove', handlePointerMove);
 window.removeEventListener('blur', resetCamera);
 

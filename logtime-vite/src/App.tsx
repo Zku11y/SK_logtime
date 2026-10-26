@@ -1,14 +1,96 @@
-import {useState,type FormEvent} from 'react';
-import {ArrowRight} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Field,FieldGroup,FieldLabel} from '@/components/ui/field';
-import {Spinner} from '@/components/ui/spinner';
+import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {getHours} from './api.js';
-import {duration,days,today} from './stats.js';
+import {duration, logtimePeriod, shiftMonth, today} from './stats.js';
 import Scene from './Scene';
-export default function App(){
- const [login,setLogin]=useState('mdakni'),[start,setStart]=useState('2026-09-28'),[end,setEnd]=useState('2026-10-20'),[hours,setHours]=useState<number|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
- async function submit(e:FormEvent){e.preventDefault();if(start>end||days(start,end)>93||start>today()){setError('Choose up to 93 days, starting today or earlier.');return}setBusy(true);setError('');try{const h=await getHours(login.trim(),start,end);setHours(h)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
- return <main className="crt-app"><Scene hours={hours} readout={hours===null?'—':String(Math.floor(hours))}/><section className="controls" aria-label="Logtime controls"><form onSubmit={submit}><FieldGroup><Field><FieldLabel htmlFor="login">School login</FieldLabel><Input id="login" value={login} onChange={e=>setLogin(e.target.value)} required pattern="[a-zA-Z0-9_-]{1,40}" disabled={busy}/></Field><div className="dates"><Field><FieldLabel htmlFor="start">From</FieldLabel><Input id="start" type="date" value={start} onChange={e=>setStart(e.target.value)} required disabled={busy}/></Field><Field><FieldLabel htmlFor="end">Through</FieldLabel><Input id="end" type="date" value={end} onChange={e=>setEnd(e.target.value)} required disabled={busy}/></Field></div><Button type="submit" disabled={busy}>{busy?<Spinner data-icon="inline-start"/>:<ArrowRight data-icon="inline-start"/>}{busy?'Loading…':'Display logtime'}</Button></FieldGroup></form>{error&&<p className="error" role="alert">{error}</p>}</section><span className="sr-only" aria-live="polite">{hours!==null?duration(hours):"No hours loaded"}</span></main>
+
+export default function App() {
+  const [month, setMonth] = useState(() => today().slice(0, 7));
+  const [login, setLogin] = useState('');
+  const [submittedLogin, setSubmittedLogin] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [hours, setHours] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const loginInput = useRef<HTMLInputElement>(null);
+  const {startDate, endDate} = logtimePeriod(month);
+
+  useEffect(() => {
+    setHours(null);
+    setError('');
+    if (!submittedLogin) { setBusy(false); return; }
+    let active = true;
+    const controller = new AbortController();
+    setBusy(true);
+    getHours(submittedLogin, startDate, endDate, controller.signal)
+      .then(value => { if (active) setHours(value); })
+      .catch(reason => { if (active) setError((reason as Error).message); })
+      .finally(() => { if (active) setBusy(false); });
+    return () => { active = false; controller.abort(); };
+  }, [submittedLogin, startDate, endDate, attempt]);
+
+  const editLogin = useCallback((value: string) => {
+    setLogin(value.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40));
+    setError('');
+    setHours(null);
+    setSubmittedLogin(null);
+  }, []);
+
+  function submit(event?: FormEvent) {
+    event?.preventDefault();
+    if (!login || busy) return;
+    setError('');
+    setSubmittedLogin(login);
+    setAttempt(value => value + 1);
+  }
+
+  const changeMonth = useCallback((offset: number) => {
+    setHours(null);
+    setMonth(value => shiftMonth(value, offset));
+  }, []);
+  const focusLogin = useCallback(() => loginInput.current?.focus({preventScroll: true}), []);
+
+  // Keep keyboard entry available after clicking the scene or a month arrow.
+  useEffect(() => {
+    function keydown(event: KeyboardEvent) {
+      if (event.target === loginInput.current || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === 'Enter') { event.preventDefault(); submit(); focusLogin(); }
+      else if (event.key === 'Backspace') {
+        event.preventDefault(); editLogin(error ? '' : login.slice(0, -1)); focusLogin();
+      } else if (/^[a-zA-Z0-9_-]$/.test(event.key)) {
+        event.preventDefault(); editLogin((error ? '' : login) + event.key); focusLogin();
+      }
+    }
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  });
+
+  return <main className="crt-app">
+    <Scene hours={hours} readout={hours === null ? '—' : String(Math.floor(hours))}
+      month={month} login={login} loginError={!!error} busy={busy}
+      onMonthChange={changeMonth} onLoginFocus={focusLogin}/>
+    <form className="sr-only" onSubmit={submit} aria-label="Logtime controls">
+      <button type="button" onClick={() => changeMonth(-1)}>Previous month</button>
+      <output aria-live="polite">{month}: {startDate} through {endDate}</output>
+      <button type="button" onClick={() => changeMonth(1)}>Next month</button>
+      <label htmlFor="login">School login. Type your login and press Enter.</label>
+      <input ref={loginInput} id="login" autoFocus value={login} autoComplete="off"
+        autoCapitalize="none" spellCheck={false} maxLength={40}
+        onChange={event => editLogin(event.target.value)}
+        onKeyDown={event => {
+          if (!error || event.ctrlKey || event.metaKey || event.altKey) return;
+          if (/^[a-zA-Z0-9_-]$/.test(event.key) || event.key === 'Backspace' || event.key === 'Delete') {
+            event.preventDefault();
+            editLogin(event.key.length === 1 ? event.key : '');
+          }
+        }}
+        onPaste={event => {
+          if (!error) return;
+          event.preventDefault(); editLogin(event.clipboardData.getData('text'));
+        }}/>
+      <button type="submit" disabled={busy || !login}>Display logtime</button>
+    </form>
+    <span className="sr-only" role="status" aria-live="polite">
+      {error ? `ERR: ${error}` : busy ? 'Loading logtime' : hours !== null ? duration(hours) : 'Type your login and press Enter'}
+    </span>
+  </main>;
 }

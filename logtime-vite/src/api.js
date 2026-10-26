@@ -1,10 +1,10 @@
 /** Send the exact school request and parse its Hydra collection. */
-export async function getHours(login, startDate, endDate) {
+export async function getHours(login, startDate, endDate, signal) {
  let response;
  try {
   response = await fetch('/api/get_log', {
    method:'POST', headers:{'Content-Type':'application/json',Accept:'application/json'},
-   body:JSON.stringify({login,startDate,endDate}), signal:AbortSignal.timeout(25000),cache:'no-store',
+   body:JSON.stringify({login,startDate,endDate}), signal:signal ? AbortSignal.any([signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),cache:'no-store',
   });
  } catch {throw new Error('Cannot reach the school API. Connect the computer running Vite to the school LAN, then retry.');}
  if(!response.ok) throw new Error(`School request failed (HTTP ${response.status}). Check school LAN access and the Vite terminal for proxy errors.`);

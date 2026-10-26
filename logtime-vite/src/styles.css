@@ -1,11 +1,19 @@
 @import 'tailwindcss';
+@font-face {
+ font-family: 'Digital Clock';
+ src: url('/fonts/digital-clock/digital-clock.ttf') format('truetype');
+ font-weight: 400;
+ font-style: normal;
+ font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 @theme inline {
  --color-background:var(--background);--color-foreground:var(--foreground);--color-card:var(--card);--color-card-foreground:var(--card-foreground);--color-popover:var(--card);--color-popover-foreground:var(--foreground);--color-primary:var(--primary);--color-primary-foreground:var(--primary-foreground);--color-secondary:var(--secondary);--color-secondary-foreground:var(--secondary-foreground);--color-muted:var(--muted);--color-muted-foreground:var(--muted-foreground);--color-accent:var(--accent);--color-accent-foreground:var(--foreground);--color-destructive:var(--destructive);--color-border:var(--border);--color-input:var(--input);--color-ring:var(--ring);--radius-sm:calc(var(--radius) - 4px);--radius-md:calc(var(--radius) - 2px);--radius-lg:var(--radius);--radius-xl:calc(var(--radius) + 4px);
 }
 :root{--background:#f6f7f9;--foreground:#202b31;--card:#ffffff;--card-foreground:#202b31;--primary:#17735c;--primary-foreground:#ffffff;--secondary:#e9f3ed;--secondary-foreground:#245d4b;--muted:#f0f2f4;--muted-foreground:#687780;--accent:#e8efeb;--destructive:#b63636;--border:#e3e8e9;--input:#dce3e5;--ring:#25846b;--chart-1:#2a8b71;--radius:.7rem;--goal:#163f35;--goal-foreground:#f0f7ee;--goal-muted:#a8c6b8;--goal-accent:#bbdf98;--goal-track:#35594b;--brand:#17735c;--surface-shadow:0 2px 3px #152d2203,0 10px 24px #152d2203;color-scheme:light}
 .dark{--background:#101816;--foreground:#e4ede8;--card:#18231f;--card-foreground:#e4ede8;--primary:#addb91;--primary-foreground:#173121;--secondary:#2b3e31;--secondary-foreground:#cee5bc;--muted:#23302a;--muted-foreground:#9aada3;--accent:#2c3e32;--destructive:#f39994;--border:#304039;--input:#3c4d44;--ring:#addb91;--chart-1:#addb91;--goal:#233c2e;--goal-foreground:#eef6e8;--goal-muted:#b2c7ae;--goal-accent:#c3e59e;--goal-track:#3f5943;--brand:#addb91;color-scheme:dark}
-@layer base{*{border-color:var(--border)}body{margin:0;background:var(--background);color:var(--foreground);font-family:Inter,'Segoe UI',Arial,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}button:not(:disabled){cursor:pointer}svg{flex-shrink:0}::selection{background:var(--accent)}html{scroll-behavior:smooth}a{color:inherit}}
+@layer base{*{border-color:var(--border)}body{margin:0;background:var(--background);color:var(--foreground);font-family:'Digital Clock',monospace;font-size:14px;-webkit-font-smoothing:antialiased}button:not(:disabled){cursor:pointer}svg{flex-shrink:0}::selection{background:var(--accent)}html{scroll-behavior:smooth}a{color:inherit}}
 @layer components{
  [data-slot=card]{box-shadow:var(--surface-shadow);border-radius:16px}
  [data-slot=card-title]{font-size:15px;letter-spacing:-.2px;font-weight:650;line-height:1.4}

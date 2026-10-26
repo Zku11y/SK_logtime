@@ -1,0 +1,11 @@
+Model Information:
+* title:	Retro CRT TV
+* source:	https://sketchfab.com/3d-models/retro-crt-tv-6bc462b233ce4c78904dfcadf5123e29
+* author:	meipal (https://sketchfab.com/ashabbugaev12)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Retro CRT TV" (https://sketchfab.com/3d-models/retro-crt-tv-6bc462b233ce4c78904dfcadf5123e29) by meipal (https://sketchfab.com/ashabbugaev12) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

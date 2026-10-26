@@ -1,0 +1,11 @@
+Model Information:
+* title:	Rusty Old Diner Table
+* source:	https://sketchfab.com/3d-models/rusty-old-diner-table-c8a64cbb12104412abe62e24f2d3cd6b
+* author:	cansuaydin (https://sketchfab.com/cansuaydin)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Rusty Old Diner Table" (https://sketchfab.com/3d-models/rusty-old-diner-table-c8a64cbb12104412abe62e24f2d3cd6b) by cansuaydin (https://sketchfab.com/cansuaydin) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

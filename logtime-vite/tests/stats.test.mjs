@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {stats,duration,add,days} from '../src/stats.js';
+import {stats,duration,add,days,logtimePeriod,shiftMonth} from '../src/stats.js';
 test('sample period and completed goals',()=>{
  const s=stats(65,'2026-09-28','2026-10-20','2026-10-21');
  assert.equal(s.elapsed,23);assert.equal(s.remaining,55);assert.equal(s.left,0);
@@ -12,4 +12,12 @@ test('week boundaries and rounded minutes',()=>{
  assert.equal(add('2026-09-28',7),'2026-10-05');
  assert.equal(days('2026-09-28','2026-10-04'),7);
  assert.equal(duration(1.999),'2h 0m');
+});
+
+test('logtime periods end on the selected month’s 28th, including year rollover', () => {
+ assert.deepEqual(logtimePeriod('2026-10'), {startDate:'2026-09-28',endDate:'2026-10-28'});
+ assert.deepEqual(logtimePeriod('2026-01'), {startDate:'2025-12-28',endDate:'2026-01-28'});
+ assert.deepEqual(logtimePeriod('2024-03'), {startDate:'2024-02-28',endDate:'2024-03-28'});
+ assert.equal(shiftMonth('2026-12',1),'2027-01');
+ assert.equal(shiftMonth('2026-01',-1),'2025-12');
 });
